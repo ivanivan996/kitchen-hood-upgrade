@@ -1,38 +1,22 @@
-// Copyright 2025 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Matter Manager
+// Matter Managerc:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\Inc\CommStack.h
 #include <Arduino.h>
 #include <Matter.h>
-#if !CONFIG_ENABLE_CHIPOBLE
 // if the device can be commissioned using BLE, WiFi is not used - save flash space
 #include <WiFi.h>
-#endif
 
-// List of Matter Endpoints for this Node
+#include "CommStack.h"
+// List of Matter Endpoints for this Nodec:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\Src\CommStack.c
 // Fan Endpoint - On/Off control + Speed Percent Control + Fan Modes
 MatterFan Fan;
 
-// CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to commission the Matter Network
-#if !CONFIG_ENABLE_CHIPOBLE
+// CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to comc:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\src\Src\CommStack.cppmission the Matter Network
 // WiFi is manually set and started
-const char *ssid = "your-ssid";          // Change this to your WiFi SSID
-const char *password = "your-password";  // Change this to your WiFi password
-#endif
+const char *ssid = "ganewlan_Plus";          // Change this to your WiFi SSID
+const char *password = "ganewlan1";  // Change this to c:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\src\src\CommStack.cppyour WiFi password
 
 // set your board USER BUTTON pin here - used for toggling On/Off and decommission the Matter Node
-const uint8_t buttonPin = BOOT_PIN;  // Set your pin here. Using BOOT Button.
+const int buttonPin = BOOT_PIN;  // Set your pin here. Using BOOT Button.
 
 // Button control
 uint32_t button_time_stamp = 0;                // debouncing control
@@ -40,51 +24,26 @@ bool button_state = false;                     // false = released | true = pres
 const uint32_t debouceTime = 250;              // button debouncing time (ms)
 const uint32_t decommissioningTimeout = 5000;  // keep the button pressed for 5s, or longer, to decommission
 
+int FanSpeedStatus = 0;
+
+extern int FanSpeed;
+extern int FanLed;
+
 // set your board Analog Pin here - used for changing the Fan speed
 const uint8_t analogPin = A0;  // Analog Pin depends on each board
 
-// set your board PWM Pin here - used for controlling the Fan speed (DC motor example)
-// for this example, it will use the builtin board RGB LED to simulate the Fan DC motor using its brightness
-#ifdef RGB_BUILTIN
-const uint8_t dcMotorPin = RGB_BUILTIN;
-#else
-const uint8_t dcMotorPin = 2;  // Set your pin here if your board has not defined LED_BUILTIN
-#warning "Do not forget to set the RGB LED pin"
-#endif
-
-void fanDCMotorDrive(bool fanState, uint8_t speedPercent) {
-  // drive the Fan DC motor
-  if (fanState == false) {
-    // turn off the Fan
-#ifndef RGB_BUILTIN
-    // after analogWrite(), it is necessary to set the GPIO to digital mode first
-    pinMode(dcMotorPin, OUTPUT);
-#endif
-    digitalWrite(dcMotorPin, LOW);
-  } else {
-    // set the Fan speed
-    uint8_t fanDCMotorPWM = map(speedPercent, 0, 100, 0, 255);
-#ifdef RGB_BUILTIN
-    rgbLedWrite(dcMotorPin, fanDCMotorPWM, fanDCMotorPWM, fanDCMotorPWM);
-#else
-    analogWrite(dcMotorPin, fanDCMotorPWM);
-#endif
-  }
-}
-
 void setup() {
+  pinMode(FanCommPin, OUTPUT);
+  digitalWrite(FanCommPin, HIGH);
+  delay(1000);
+  digitalWrite(FanCommPin, LOW);
   // Initialize the USER BUTTON (Boot button) GPIO that will toggle the Fan (On/Off) and decommission the Matter Node
   pinMode(buttonPin, INPUT_PULLUP);
   // Initialize the Analog Pin A0 used to read input voltage and to set the Fan speed accordingly
-  pinMode(analogPin, INPUT);
-  analogReadResolution(10);  // 10 bits resolution reading 0..1023
-  // Initialize the PWM output pin for a Fan DC motor
-  pinMode(dcMotorPin, OUTPUT);
 
   Serial.begin(115200);
 
 // CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to commission the Matter Network
-#if !CONFIG_ENABLE_CHIPOBLE
   // We start by connecting to a WiFi network
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -99,7 +58,6 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   delay(500);
-#endif
 
   // On Boot or Reset, Fan is set at 0% speed, OFF, changing between OFF, ON, SMART and HIGH
   Fan.begin(0, MatterFan::FAN_MODE_OFF, MatterFan::FAN_MODE_SEQ_OFF_HIGH);
@@ -142,7 +100,7 @@ void setup() {
     // just report state
     Serial.printf("Fan State: Mode %s | %u%% speed.\r\n", Fan.getFanModeString(fanMode), speedPercent);
     // drive the Fan DC motor
-    fanDCMotorDrive(fanMode != MatterFan::FAN_MODE_OFF, speedPercent);
+    //fanDCMotorDrive(fanMode != MatterFan::FAN_MODE_OFF, speedPercent);
     // returns success
     return true;
   });
@@ -156,57 +114,28 @@ void setup() {
 }
 
 void loop() {
-  // Check Matter Accessory Commissioning state, which may change during execution of loop()
+  // 1. NEBLOKIRAJUĆA PROVERA ZA MATTER UPARIVANJE
   if (!Matter.isDeviceCommissioned()) {
-    Serial.println("");
-    Serial.println("Matter Node is not commissioned yet.");
-    Serial.println("Initiate the device discovery in your Matter environment.");
-    Serial.println("Commission it to your Matter hub with the manual pairing code or QR code");
-    Serial.printf("Manual pairing code: %s\r\n", Matter.getManualPairingCode().c_str());
-    Serial.printf("QR code URL: %s\r\n", Matter.getOnboardingQRCodeUrl().c_str());
-    // waits for Matter Generic Switch Commissioning.
-    uint32_t timeCount = 0;
-    while (!Matter.isDeviceCommissioned()) {
-      delay(100);
-      if ((timeCount++ % 50) == 0) {  // 50*100ms = 5 sec
-        Serial.println("Matter Node not commissioned yet. Waiting for commissioning.");
-      }
-    }
-    Serial.println("Matter Node is commissioned and connected to the network. Ready for use.");
-  }
-
-  // A builtin button is used to trigger and send a command to the Matter Controller
-  // Check if the button has been pressed
-  if (digitalRead(buttonPin) == LOW && !button_state) {
-    // deals with button debouncing
-    button_time_stamp = millis();  // record the time while the button is pressed.
-    button_state = true;           // pressed.
-  }
-
-  // Onboard User Button is used as a smart button or to decommission it
-  uint32_t time_diff = millis() - button_time_stamp;
-  if (button_state && time_diff > debouceTime && digitalRead(buttonPin) == HIGH) {
-    button_state = false;  // released
-    // button is released - toggle Fan On/Off
-    Fan.toggle();
-    Serial.printf("User button released. Setting the Fan %s.\r\n", Fan > 0 ? "ON" : "OFF");
-  }
-
-  // Onboard User Button is kept pressed for longer than 5 seconds in order to decommission matter node
-  if (button_state && time_diff > decommissioningTimeout) {
-    Serial.println("Decommissioning Fan Matter Accessory. It shall be commissioned again.");
-    Matter.decommission();
-    button_time_stamp = millis();  // avoid running decommissining again, reboot takes a second or so
-  }
-
-  // checks Analog pin and adjust the speed only if it has changed
-  static int lastRead = 0;
-  // analog values (0..1023) / 103 => mapped into 10 steps (0..9)
-  int anaVal = analogRead(analogPin) / 103;
-  if (lastRead != anaVal) {
-    // speed percent moves in steps of 10. Range is 10..100
-    if (Fan.setSpeedPercent((anaVal + 1) * 10)) {
-      lastRead = anaVal;
+    // Koristimo static tajmer umesto while petlje da ne bismo blokirali pinove
+    static uint32_t vremeIspisa = 0;
+    if (millis() - vremeIspisa > 5000) { // Ispisuje stanje svakih 5 sekundi
+      vremeIspisa = millis();
+      Serial.println("\r\nMatter Node nije uparen! Cekam povezivanje na aplikaciju...");
+      Serial.printf("Manual pairing code: %s\r\n", Matter.getManualPairingCode().c_str());
+      Serial.printf("QR code URL: %s\r\n", Matter.getOnboardingQRCodeUrl().c_str());
     }
   }
+
+  // 2. VAŠ TEST TOGGLE - Sada se izvršava bez obzira na stanje uparivanja!
+  // Smanjili smo učestalost slanja na svake 2 sekunde da ne zagušimo ESP32-C6 i Matter pozadinu
+  //static uint32_t vremeSlanja = 0;
+  //if (millis() - vremeSlanja > 5) { 
+  //  vremeSlanja = millis();
+    
+  //  Serial.println("-> Izvrsavam test toggle 100ms i saljem protokol...");
+    
+    // Punjenje niza novim bitovima i slanje kroz CommStack
+    FanCommFormPacket(1, FanLed);
+    FanCommSendTelegram(1, FanLed);
+  //}
 }
