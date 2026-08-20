@@ -135,7 +135,7 @@ void loop() {
   //  Serial.println("-> Izvrsavam test toggle 100ms i saljem protokol...");
     
     // Punjenje niza novim bitovima i slanje kroz CommStack
-    FanCommFormPacket(1, FanLed);
-    FanCommSendTelegram(1, FanLed);
+    FanCommFormPacket(0, FanLed);
+    FanCommCycle();
   //}
 }
