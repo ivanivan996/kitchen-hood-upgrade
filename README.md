@@ -4,18 +4,18 @@ The ESP32 communicates with the fan controller through `GPIO 8` using a custom p
 
 ## Timing
 
+The communication timer runs at **1 MHz** and `FanCommCycle()` is executed every **100 µs**.
+
 | Signal | HIGH | LOW | Total |
 |---|---:|---:|---:|
-| Preamble | 1920 µs | 1154 µs | 3074 µs |
-| Logic `1` | 1380 µs | 640 µs | 2020 µs |
-| Logic `0` | 520 µs | 1530 µs | 2050 µs |
-| Packet pause | 0 µs | 5100 µs | 5100 µs |
+| Preamble | 1920 µs | 1152 µs | 3072 µs |
+| Logic `1` | 1408 µs | 640 µs | 2048 µs |
+| Logic `0` | 512 µs | 1536 µs | 2048 µs |
+| Packet pause | — | 5640 µs | 5640 µs |
 
-The hardware timer runs at **1 MHz** and the state machine is executed every **100 µs**.
+## Telegram
 
-## Telegram Structure
-
-The controller continuously transmits **3 × 16-bit packets**:
+The protocol consists of **3 × 16-bit packets**.
 
 ```text
 Packet 1 → FanCommTelegram[2]
