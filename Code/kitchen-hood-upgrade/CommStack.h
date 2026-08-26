@@ -34,6 +34,6 @@ const uint32_t speedMasks[] = {
 
 // Prototipovi funkcija
 void FanCommFormPacket(int FanSpeed, int FanLed);
-void FanCommCycle();
+void IRAM_ATTR FanCommCycle();
 
 #endif

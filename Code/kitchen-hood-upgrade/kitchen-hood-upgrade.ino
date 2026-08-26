@@ -1,19 +1,18 @@
-
-// Matter Managerc:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\Inc\CommStack.h
 #include <Arduino.h>
 #include <Matter.h>
 // if the device can be commissioned using BLE, WiFi is not used - save flash space
 #include <WiFi.h>
 
 #include "CommStack.h"
-// List of Matter Endpoints for this Nodec:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\Src\CommStack.c
+
+// List of Matter Endpoints for this Node
 // Fan Endpoint - On/Off control + Speed Percent Control + Fan Modes
 MatterFan Fan;
 
-// CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to comc:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\src\Src\CommStack.cppmission the Matter Network
+// CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to commission the Matter Network
 // WiFi is manually set and started
-const char *ssid = "ganewlan_Plus";          // Change this to your WiFi SSID
-const char *password = "ganewlan1";  // Change this to c:\Users\Ivan\git\kitchen-hood-upgrade\Code\kitchen-hood-upgrade\src\src\CommStack.cppyour WiFi password
+const char *ssid = "ganewlan";               // Change this to your WiFi SSID
+const char *password = "ganewlan1";          // Change this to your WiFi password
 
 // set your board USER BUTTON pin here - used for toggling On/Off and decommission the Matter Node
 const int buttonPin = BOOT_PIN;  // Set your pin here. Using BOOT Button.
@@ -26,24 +25,38 @@ const uint32_t decommissioningTimeout = 5000;  // keep the button pressed for 5s
 
 int FanSpeedStatus = 0;
 
+// definisano u CommStack.cpp
 extern int FanSpeed;
 extern int FanLed;
 
 // set your board Analog Pin here - used for changing the Fan speed
 const uint8_t analogPin = A0;  // Analog Pin depends on each board
 
+// hardverski tajmer koji poziva FanCommCycle() svakih 100us
+hw_timer_t *FanCommTimer = NULL;
+
+// sprečava kružno okidanje onChangeSpeedPercent <-> onChangeMode preko ATTR_SET
+volatile bool fanCallbackGuard = false;
+
+// signal iz Matter callback-a ka loop() da treba formirati novi telegram
+// (posao se NE radi direktno u Matter/CHIP task kontekstu, samo se postavi flag)
+volatile bool fanNeedsUpdate = false;
+volatile int lastFanSpeed = -1;  // -1 = forsira prvo formiranje paketa
+
 void setup() {
+  // Inicijalizacija komunikacionog pina prema fan kontroleru (reset puls)
   pinMode(FanCommPin, OUTPUT);
   digitalWrite(FanCommPin, HIGH);
   delay(1000);
   digitalWrite(FanCommPin, LOW);
+
   // Initialize the USER BUTTON (Boot button) GPIO that will toggle the Fan (On/Off) and decommission the Matter Node
   pinMode(buttonPin, INPUT_PULLUP);
   // Initialize the Analog Pin A0 used to read input voltage and to set the Fan speed accordingly
 
   Serial.begin(115200);
 
-// CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to commission the Matter Network
+  // CONFIG_ENABLE_CHIPOBLE is enabled when BLE is used to commission the Matter Network
   // We start by connecting to a WiFi network
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -68,40 +81,66 @@ void setup() {
   // single feature callbacks take place before the generic (all features) callback
   // This callback will be executed whenever the speed percent matter attribute is updated
   Fan.onChangeSpeedPercent([](uint8_t speedPercent) {
+    if (fanCallbackGuard) {
+      // već smo unutar lanca callback-ova (pozvano iz onChangeMode preko ATTR_SET) - izađi bez daljeg okidanja
+      return true;
+    }
+    fanCallbackGuard = true;
+
+    bool result = true;
     // setting speed to Zero, while the Fan is ON, shall turn the Fan OFF
     if (speedPercent == MatterFan::OFF_SPEED && Fan.getMode() != MatterFan::FAN_MODE_OFF) {
       // ATTR_SET do not update the attribute, just SET it to avoid infinite loop
-      return Fan.setOnOff(false, Fan.ATTR_SET);
+      result = Fan.setOnOff(false, Fan.ATTR_SET);
     }
     // changing the speed to higher than Zero, while the Fan is OFF, shall turn the Fan ON
-    if (speedPercent > MatterFan::OFF_SPEED && Fan.getMode() == MatterFan::FAN_MODE_OFF) {
+    else if (speedPercent > MatterFan::OFF_SPEED && Fan.getMode() == MatterFan::FAN_MODE_OFF) {
       // ATTR_SET do not update the attribute, just SET it to avoid infinite loop
-      return Fan.setOnOff(true, Fan.ATTR_SET);
+      result = Fan.setOnOff(true, Fan.ATTR_SET);
     }
-    // for other case, just return true
-    return true;
+
+    fanCallbackGuard = false;
+    return result;
   });
 
   // This callback will be executed whenever the fan mode matter attribute is updated
   // This will take action when user APP starts the Fan by changing the mode
   Fan.onChangeMode([](MatterFan::FanMode_t fanMode) {
+    if (fanCallbackGuard) {
+      // već smo unutar lanca callback-ova (pozvano iz onChangeSpeedPercent preko ATTR_SET) - izađi bez daljeg okidanja
+      return true;
+    }
+    fanCallbackGuard = true;
+
+    bool result = true;
     // when the Fan is turned ON using Mode Selection, while it is OFF, shall start it by setting the speed to 50%
     if (Fan.getSpeedPercent() == MatterFan::OFF_SPEED && fanMode != MatterFan::FAN_MODE_OFF) {
       Serial.printf("Fan set to %s mode -- speed percentage will go to 50%%\r\n", Fan.getFanModeString(fanMode));
       // ATTR_SET do not update the attribute, just SET it to avoid infinite loop
-      return Fan.setSpeedPercent(50, Fan.ATTR_SET);
+      result = Fan.setSpeedPercent(50, Fan.ATTR_SET);
     }
-    return true;
+
+    fanCallbackGuard = false;
+    return result;
   });
 
   // Generic callback will be executed as soon as a single feature callback is done
-  // In this example, it will just print status messages
+  // Namerno je MINIMALAN - samo upiše novu brzinu i postavi flag.
+  // Stvarni posao (FanCommFormPacket, Serial.printf) se radi u loop(), van CHIP task konteksta,
+  // da bi se izbeglo trošenje/akumuliranje steka CHIP task-a kod brzih uzastopnih Matter komandi.
   Fan.onChange([](MatterFan::FanMode_t fanMode, uint8_t speedPercent) {
-    // just report state
-    Serial.printf("Fan State: Mode %s | %u%% speed.\r\n", Fan.getFanModeString(fanMode), speedPercent);
-    // drive the Fan DC motor
-    //fanDCMotorDrive(fanMode != MatterFan::FAN_MODE_OFF, speedPercent);
-    // returns success
+    int newSpeed;
+    if (fanMode == MatterFan::FAN_MODE_OFF || speedPercent == MatterFan::OFF_SPEED) {
+      newSpeed = 0;
+    } else {
+      newSpeed = map(speedPercent, 1, 100, 1, 6);
+      if (newSpeed < 1) newSpeed = 1;
+      if (newSpeed > 6) newSpeed = 6;
+    }
+
+    FanSpeed = newSpeed;
+    fanNeedsUpdate = true;  // loop() će formirati paket kad stigne red
+
     return true;
   });
 
@@ -111,14 +150,23 @@ void setup() {
   if (Matter.isDeviceCommissioned()) {
     Serial.println("Matter Node is commissioned and connected to the network. Ready for use.");
   }
+
+  // Formiraj početni telegram pre nego što tajmer krene da ga šalje
+  FanCommFormPacket(FanSpeed, 0);
+  lastFanSpeed = FanSpeed;
+
+  // Pokreni tajmer koji poziva FanCommCycle() svakih 100us
+  FanCommTimer = timerBegin(1000000);  // 1 MHz -> 1 tick = 1us
+  timerAttachInterrupt(FanCommTimer, &FanCommCycle);
+  timerAlarm(FanCommTimer, 100, true, 0);  // 100us, autoreload, beskonačno
 }
 
 void loop() {
-  // 1. NEBLOKIRAJUĆA PROVERA ZA MATTER UPARIVANJE
+  // NEBLOKIRAJUĆA PROVERA ZA MATTER UPARIVANJE
   if (!Matter.isDeviceCommissioned()) {
     // Koristimo static tajmer umesto while petlje da ne bismo blokirali pinove
     static uint32_t vremeIspisa = 0;
-    if (millis() - vremeIspisa > 5000) { // Ispisuje stanje svakih 5 sekundi
+    if (millis() - vremeIspisa > 5000) {  // Ispisuje stanje svakih 5 sekundi
       vremeIspisa = millis();
       Serial.println("\r\nMatter Node nije uparen! Cekam povezivanje na aplikaciju...");
       Serial.printf("Manual pairing code: %s\r\n", Matter.getManualPairingCode().c_str());
@@ -126,16 +174,17 @@ void loop() {
     }
   }
 
-  // 2. VAŠ TEST TOGGLE - Sada se izvršava bez obzira na stanje uparivanja!
-  // Smanjili smo učestalost slanja na svake 2 sekunde da ne zagušimo ESP32-C6 i Matter pozadinu
-  //static uint32_t vremeSlanja = 0;
-  //if (millis() - vremeSlanja > 5) { 
-  //  vremeSlanja = millis();
-    
-  //  Serial.println("-> Izvrsavam test toggle 100ms i saljem protokol...");
-    
-    // Punjenje niza novim bitovima i slanje kroz CommStack
-    FanCommFormPacket(0, FanLed);
-    FanCommCycle();
-  //}
+  // Obradi update brzine van CHIP task konteksta, i samo ako se vrednost stvarno promenila
+  if (fanNeedsUpdate) {
+    fanNeedsUpdate = false;
+    int speedNow = FanSpeed;
+    if (speedNow != lastFanSpeed) {
+      lastFanSpeed = speedNow;
+      FanCommFormPacket(speedNow, 0);
+      Serial.printf("Fan speed updated to %d\r\n", speedNow);
+    }
+  }
+
+  // Slanje protokola prema fan kontroleru se odvija automatski u pozadini
+  // preko hardverskog tajmera (FanCommCycle, pozivan svakih 100us).
 }

@@ -29,7 +29,7 @@ void FanCommFormPacket(int FanSpeed, int FanLed) {
   FanCommTelegram[0] = ThirdPacketLedOff;
 }
 
-void FanCommCycle() {
+void IRAM_ATTR FanCommCycle() {
   FanCommTicks++;
 
   switch (FanCommCurrentState) {
