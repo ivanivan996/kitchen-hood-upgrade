@@ -18,15 +18,23 @@ enum FanCommState {
 FanCommState FanCommCurrentState = DECIDE;
 int32_t FanCommTicks = 0;
 int32_t FanCommTargetTicks = 0;
-
-int32_t FanCommTelegram[3] = { 0, 0, 0 };
+int32_t FanCommTelegram[3] = {0, 0, 0};
 int32_t FanCommPacketCount = 2;
 int32_t FanCommBitCount = 16;
 
 void FanCommFormPacket(int FanSpeed, int FanLed) {
-  FanCommTelegram[2] = FirstPacketLedOff | speedMasks[FanSpeed];
-  FanCommTelegram[1] = SecondPacketLedOff;
-  FanCommTelegram[0] = ThirdPacketLedOff;
+  if (FanSpeed < 0) FanSpeed = 0;
+  if (FanSpeed > 6) FanSpeed = 6;
+
+  if (FanLed) {
+    FanCommTelegram[2] = FirstPacketLedOn | speedMasksLedOn[FanSpeed];
+    FanCommTelegram[1] = SecondPacketLedOn;
+    FanCommTelegram[0] = ThirdPacketLedOn;
+  } else {
+    FanCommTelegram[2] = FirstPacketLedOff | speedMasksLedOff[FanSpeed];
+    FanCommTelegram[1] = SecondPacketLedOff;
+    FanCommTelegram[0] = ThirdPacketLedOff;
+  }
 }
 
 void IRAM_ATTR FanCommCycle() {
@@ -40,9 +48,7 @@ void IRAM_ATTR FanCommCycle() {
         FanCommTargetTicks = FirstPulseHighTime / 100;
       } else if (FanCommBitCount == -1) {
         FanCommPacketCount--;
-        if (FanCommPacketCount < 0) {
-          FanCommPacketCount = 2;
-        }
+        if (FanCommPacketCount < 0) FanCommPacketCount = 2;
         FanCommBitCount = 16;
         FanCommTicks = 0;
         FanCommTargetTicks = PauseTime / 100;
@@ -52,7 +58,7 @@ void IRAM_ATTR FanCommCycle() {
           FanCommTicks = 0;
           FanCommTargetTicks = HighPulseHighTime / 100;
           FanCommCurrentState = SEND_HIGH_HIGH;
-        } else if (((FanCommTelegram[FanCommPacketCount] >> FanCommBitCount) & 1) == 0) {
+        } else {
           FanCommTicks = 0;
           FanCommTargetTicks = LowPulseHighTime / 100;
           FanCommCurrentState = SEND_LOW_HIGH;
@@ -62,9 +68,7 @@ void IRAM_ATTR FanCommCycle() {
 
     case SEND_PAUSE:
       digitalWrite(FanCommPin, LOW);
-      if (FanCommTicks >= FanCommTargetTicks) {
-        FanCommCurrentState = DECIDE;
-      }
+      if (FanCommTicks >= FanCommTargetTicks) FanCommCurrentState = DECIDE;
       break;
 
     case SEND_PREAMBLE_HIGH:
