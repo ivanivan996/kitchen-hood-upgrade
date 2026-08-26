@@ -6,12 +6,12 @@
 #define FanCommPin 8
 
 #define FirstPulseHighTime 1920
-#define FirstPulseLowTime 1154
-#define HighPulseHighTime 1380
+#define FirstPulseLowTime 1152
+#define HighPulseHighTime 1408
 #define HighPulseLowTime 640
-#define LowPulseHighTime 520
-#define LowPulseLowTime 1530
-#define PauseTime 5100
+#define LowPulseHighTime 512
+#define LowPulseLowTime 1536
+#define PauseTime 5640
 
 const uint32_t FirstPacketLedOff = 0b0000101000000000;
 const uint32_t SecondPacketLedOff = 0b0000111000000000;
