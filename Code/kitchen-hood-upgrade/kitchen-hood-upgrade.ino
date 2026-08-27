@@ -1,11 +1,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ModbusIP_ESP8266.h>
-
 #include "CommStack.h"
 
-const char *ssid = "ganewlan";
-const char *password = "ganewlan1";
+const char *ssid = "HUAWEI-2.4G-wXp9";
+const char *password = "W7j2T58C";
 
 IPAddress local_IP(192, 168, 100, 90);
 IPAddress gateway(192, 168, 100, 1);
@@ -24,10 +23,12 @@ int lastLed = 0;
 
 #define BUTTON_UP 6
 #define BUTTON_DOWN 7
+#define BUTTON_LED 5
 
-#define REG_LED 0
-#define REG_SPEED 1
-#define REG_STATUS 2
+#define REG_LED_COMMAND 0
+#define REG_LED_STATUS 1
+#define REG_SPEED_COMMAND 2
+#define REG_SPEED_STATUS 3
 
 uint32_t lastButtonTime = 0;
 const uint32_t debounceTime = 200;
@@ -36,28 +37,25 @@ void setFanSpeed(int speed) {
   if (speed < 0) speed = 0;
   if (speed > 6) speed = 6;
 
-  if (speed == lastSpeed) return;
-
   lastSpeed = speed;
   FanSpeed = speed;
 
   FanCommFormPacket(FanSpeed, FanLed);
 
-  mb.Hreg(REG_SPEED, speed);
-  mb.Hreg(REG_STATUS, speed);
+  mb.Hreg(REG_SPEED_COMMAND, speed);
+  mb.Hreg(REG_SPEED_STATUS, speed);
 }
 
 void setFanLed(int led) {
   led = led ? 1 : 0;
-
-  if (led == lastLed) return;
 
   lastLed = led;
   FanLed = led;
 
   FanCommFormPacket(FanSpeed, FanLed);
 
-  mb.Hreg(REG_LED, led);
+  mb.Hreg(REG_LED_COMMAND, led);
+  mb.Hreg(REG_LED_STATUS, led);
 }
 
 void setup() {
@@ -70,6 +68,7 @@ void setup() {
 
   pinMode(BUTTON_UP, INPUT_PULLUP);
   pinMode(BUTTON_DOWN, INPUT_PULLUP);
+  pinMode(BUTTON_LED, INPUT_PULLUP);
 
   FanSpeed = 0;
   FanLed = 0;
@@ -91,9 +90,10 @@ void setup() {
 
   mb.server();
 
-  mb.addHreg(REG_LED, 0);
-  mb.addHreg(REG_SPEED, 0);
-  mb.addHreg(REG_STATUS, 0);
+  mb.addHreg(REG_LED_COMMAND, 0);
+  mb.addHreg(REG_LED_STATUS, 0);
+  mb.addHreg(REG_SPEED_COMMAND, 0);
+  mb.addHreg(REG_SPEED_STATUS, 0);
 
   FanCommTimer = timerBegin(1000000);
   timerAttachInterrupt(FanCommTimer, &FanCommCycle);
@@ -103,7 +103,7 @@ void setup() {
 void loop() {
   mb.task();
 
-  int modbusSpeed = mb.Hreg(REG_SPEED);
+  int modbusSpeed = mb.Hreg(REG_SPEED_COMMAND);
 
   if (modbusSpeed > 6) modbusSpeed = 6;
   if (modbusSpeed < 0) modbusSpeed = 0;
@@ -112,7 +112,7 @@ void loop() {
     setFanSpeed(modbusSpeed);
   }
 
-  int modbusLed = mb.Hreg(REG_LED);
+  int modbusLed = mb.Hreg(REG_LED_COMMAND);
 
   if (modbusLed > 1) modbusLed = 1;
   if (modbusLed < 0) modbusLed = 0;
@@ -126,10 +126,13 @@ void loop() {
       lastButtonTime = millis();
       setFanSpeed(lastSpeed + 1);
     }
-
-    if (digitalRead(BUTTON_DOWN) == LOW) {
+    else if (digitalRead(BUTTON_DOWN) == LOW) {
       lastButtonTime = millis();
       setFanSpeed(lastSpeed - 1);
+    }
+    else if (digitalRead(BUTTON_LED) == LOW) {
+      lastButtonTime = millis();
+      setFanLed(!lastLed);
     }
   }
 

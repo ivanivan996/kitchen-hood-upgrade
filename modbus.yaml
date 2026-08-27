@@ -1,0 +1,19 @@
+- name: Aspirator
+  type: tcp
+  host: 192.168.100.90
+  port: 502
+
+  sensors:
+    - name: Aspirator LED Status
+      slave: 1
+      address: 1
+      input_type: holding
+      data_type: uint16
+      scan_interval: 1
+
+    - name: Aspirator Brzina Status
+      slave: 1
+      address: 3
+      input_type: holding
+      data_type: uint16
+      scan_interval: 1

@@ -1,0 +1,96 @@
+default_config:
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+modbus: !include modbus.yaml
+
+template:
+  - fan:
+      - name: Aspirator Fan
+        unique_id: aspirator_fan
+        state: "{{ states('sensor.aspirator_brzina_status') | int(0) > 0 }}"
+
+        percentage: >
+          {% set speed = states('sensor.aspirator_brzina_status') | int(0) %}
+          {% if speed == 0 %}
+            0
+          {% elif speed == 1 %}
+            17
+          {% elif speed == 2 %}
+            33
+          {% elif speed == 3 %}
+            50
+          {% elif speed == 4 %}
+            67
+          {% elif speed == 5 %}
+            83
+          {% else %}
+            100
+          {% endif %}
+
+        speed_count: 6
+
+        turn_on:
+          - action: modbus.write_register
+            data:
+              hub: Aspirator
+              slave: 1
+              address: 2
+              value: 1
+
+        turn_off:
+          - action: modbus.write_register
+            data:
+              hub: Aspirator
+              slave: 1
+              address: 2
+              value: 0
+
+        set_percentage:
+          - action: modbus.write_register
+            data:
+              hub: Aspirator
+              slave: 1
+              address: 2
+              value: >
+                {% if percentage == 0 %}
+                  0
+                {% elif percentage <= 20 %}
+                  1
+                {% elif percentage <= 40 %}
+                  2
+                {% elif percentage <= 60 %}
+                  3
+                {% elif percentage <= 80 %}
+                  4
+                {% elif percentage < 100 %}
+                  5
+                {% else %}
+                  6
+                {% endif %}
+
+  - switch:
+      - name: Aspirator LED
+        unique_id: aspirator_led
+        state: "{{ states('sensor.aspirator_led_status') | int(0) == 1 }}"
+
+        turn_on:
+          - action: modbus.write_register
+            data:
+              hub: Aspirator
+              slave: 1
+              address: 0
+              value: 1
+
+        turn_off:
+          - action: modbus.write_register
+            data:
+              hub: Aspirator
+              slave: 1
+              address: 0
+              value: 0
