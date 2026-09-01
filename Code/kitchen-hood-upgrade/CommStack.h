@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define FanCommPin 8
+#define FanCommPin 10
 
 #define FirstPulseHighTime 1920
 #define FirstPulseLowTime 1152

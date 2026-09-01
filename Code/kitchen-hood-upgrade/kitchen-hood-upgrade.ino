@@ -21,9 +21,9 @@ hw_timer_t *FanCommTimer = NULL;
 int lastSpeed = 0;
 int lastLed = 0;
 
-#define BUTTON_UP 6
-#define BUTTON_DOWN 7
-#define BUTTON_LED 5
+#define BUTTON_LED 1
+#define BUTTON_UP 2
+#define BUTTON_DOWN 3
 
 #define REG_LED_COMMAND 0
 #define REG_LED_STATUS 1
@@ -31,7 +31,7 @@ int lastLed = 0;
 #define REG_SPEED_STATUS 3
 
 uint32_t lastButtonTime = 0;
-const uint32_t debounceTime = 200;
+const uint32_t debounceTime = 800;
 
 void setFanSpeed(int speed) {
   if (speed < 0) speed = 0;
