@@ -1,7 +1,7 @@
 # fan_hood: kitchen hood as a Matter device
 
 ESP-IDF / esp-matter port of the Arduino firmware in the `kitchen-hood-upgrade` repo
-(`Code/kitchen-hood-upgrade`). The Modbus TCP server and the
+(`Archive/Code/kitchen-hood-upgrade`). The Modbus TCP server and the
 Home Assistant template entities are replaced by native Matter endpoints, so the hood works
 directly with Home Assistant, Apple Home, Google Home and Alexa.
 
@@ -36,7 +36,7 @@ so it keeps running during flash writes.
 
 ```bash
 # ESP-IDF v6 + esp-matter must be exported (ESP_MATTER_PATH set)
-cd matter/fan_hood
+cd kitchen-hood-upgrade
 idf.py set-target esp32c6
 idf.py build
 idf.py -p <PORT> flash monitor
@@ -44,4 +44,4 @@ idf.py -p <PORT> flash monitor
 
 Pair with the manual code `34970112332` (test credentials, "Uncertified accessory" warning is expected).
 Once paired, remove the `modbus:` include and the `Aspirator` template entities from
-`configuration.yaml`.
+`configuration.yaml` (old setup in `Archive/`).
