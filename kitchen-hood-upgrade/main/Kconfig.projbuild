@@ -1,0 +1,32 @@
+menu "Kitchen Hood Configuration"
+
+    config ENABLE_MEMORY_PROFILING
+        bool "Enable Memory Profiling"
+        default n
+        help
+            Enable this option to include memory profiling features in the example.
+            This will allow you to monitor memory usage during runtime.
+
+    config HOOD_COMM_GPIO
+        int "Telegram output GPIO to the fan controller"
+        default 10
+        range 0 30
+        help
+            Pin wired to the hood's fan controller (FanCommPin in the Arduino firmware).
+
+    config HOOD_BUTTON_LIGHT_GPIO
+        int "Light button GPIO (-1 to disable)"
+        default 1
+        range -1 30
+
+    config HOOD_BUTTON_UP_GPIO
+        int "Speed up button GPIO (-1 to disable)"
+        default 2
+        range -1 30
+
+    config HOOD_BUTTON_DOWN_GPIO
+        int "Speed down button GPIO (-1 to disable)"
+        default 3
+        range -1 30
+
+endmenu
